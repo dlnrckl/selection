@@ -1,0 +1,118 @@
+initialize() {
+    // Simulate a 50 kb segment
+    defineConstant("L", 50000);
+
+    // Set the mutation rate
+    initializeMutationRate(1.2e-8);
+    initializeMutationType("m1", 0.5, "f", 0.0);
+    m1.convertToSubstitution = F;
+
+    // Initialize neutral mutation with h = 0.5 and s = 0
+    initializeMutationType("m2", 0.5, "f", 0);
+    m2.convertToSubstitution = F;
+
+    // Define genomic element type g1 using m1
+    initializeGenomicElementType("g1", m1, 1.0); 
+    initializeGenomicElement(g1, 0, L-1);
+
+    // Set the recombination rate
+    initializeRecombinationRate(1e-8);
+}
+
+// p1 = West Asians, initialize the Ancient West Asian population
+1 early() { 
+    defineConstant("simID", getSeed());
+    sim.addSubpop("p1", 7500);           
+}
+
+// End burn-in; expand the West Asian population
+75000 early() {                                               
+    p1.setSubpopulationSize(15000);
+}
+
+// Initialize mutation in the p1 population after burn-in 
+// (frequency = 0.50, 7500 genomes)
+75000 late() {
+   sim.outputFull("/tmp/slim_" + simID + ".txt");  // Save the simulation
+   target_p1 = sample(p1.genomes, 7500);  // 7500 genomes (0.50 frequency in 7500 individuals)
+   targetMutation = target_p1.addNewDrawnMutation(m2, asInteger(50000/2));  // Mutation in the middle
+}
+
+// p2 = Asia
+75001 early() {
+    sim.addSubpopSplit("p2", 10000, p1);
+}
+
+// p3 = Caucasus hunter-gatherer (initial pop. size = 3000)
+// p4 = Anatolian Farmers (initial pop. size = 5000)
+75700 early() {
+    sim.addSubpopSplit("p3", 3000, p1);
+    sim.addSubpopSplit("p4", 5000, p1);
+}
+
+// Check mutation frequency in the p4 population 
+// (0.50 frequency in 5000 individuals = 5000 genomes)
+75700 late() {
+    // Find mutations of type m2
+   mut = sim.mutationsOfType(m2);
+   catn('sim.mutationFrequencies(p4, mut): ' + sim.mutationFrequencies(p4, mut));
+   mutFreq_p4  = sim.mutationFrequencies(p4, mut);
+   catn('mutFreq_p4: ' +  mutFreq_p4 );
+   if  (mutFreq_p4 < 0.45 | mutFreq_p4 > 0.55) {
+             catn(simID + ": Mutation not in the desired frequency in p4 - RESTARTING");
+             sim.readFromPopulationFile("/tmp/slim_" + simID + ".txt");
+             setSeed(getSeed() + 1);
+             target_p1 = sample(p1.genomes, 7500);  // Restart the mutation
+             target_p1.addNewDrawnMutation(m2, asInteger(50000/2));  // Re-add the mutation
+         } else {
+             print("Mutation frequency in p4 is in the desired frequency range (0.4-0.6), continuing simulation.");
+         }
+}
+
+// p5 = Bronze Age Anatolians (75% ANA, 25% CHG) 170 kya
+76330 early() {
+    sim.addSubpop("p5", 20000);
+    p5.setMigrationRates(c(p3,p4), c(0.25, 0.75));
+}
+
+// Remove the source populations p3 and p4
+76330 late() {
+    p5.setMigrationRates(c(p3,p4), c(0.0, 0.0));
+    p3.setSubpopulationSize(0);
+    p4.setSubpopulationSize(0);
+}
+
+// p2 = Asia, p6 = Present Day Anatolians
+76500 early() {
+    sim.addSubpop("p6", 30000);
+    p6.setMigrationRates(c(p2,p5), c(0.10, 0.90));  // Kars et al. 2021
+}
+
+// Remove p2 and stop the migration
+76500 late() {
+    p6.setMigrationRates(p2, 0.0);
+    p6.setMigrationRates(p5, 0.0);
+    p2.setSubpopulationSize(0);
+    p5.setSubpopulationSize(0);
+}
+
+// Neolithic period
+75701 late() {
+    p4.outputMSSample(200, replace=F, filePath="p_1_1000.ms");
+}
+
+// Bronze Age Anatolia
+76330 late() {
+    p5.outputMSSample(200, replace=F, filePath="p_1_2000.ms");
+}
+
+// Present Day Anatolia
+76500 late() {
+    p6.outputMSSample(200, replace=F, filePath="p_1_3000.ms");
+}
+
+// Terminate simulation
+76501 early() { 
+    deleteFile("/tmp/slim_" + simID + ".txt");
+    sim.simulationFinished();
+}
