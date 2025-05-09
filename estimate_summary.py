@@ -549,8 +549,9 @@ SAMPLING_TIME = sys.argv[3]
 
 print(FILENAME, RUN, SAMPLING_TIME)
 
-chroms = read_msms(FILENAME, 16, 50000)[0]
-positions = read_msms(FILENAME, 16, 50000)[1]
+# - 16 haploid chromosome (8 diploid individuals since 8*2=16)
+# - 50000 base pair genomic region length
+chroms, positions = read_msms(FILENAME, 16, 50000)
 
 
 #statistics = sum_stats(chroms, positions, 2000, 'NA_NA_' + RUN)[1]
