@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=1   
 #SBATCH --time=30-00:00:00    
 #SBATCH --output=output_%j.txt 
-#SBATCH --error=error_%j.txt   
+#SBATCH --error=error_%j.txt
 
 bcftools=/usr/local/sw/bcftools-1.18/bcftools
 ref=/mnt/NEOGENE3/share/ref/genomes/hsa/hg38-v0-Homo_sapiens_assembly38.fasta
@@ -28,7 +28,7 @@ do
     $bcftools call -mv -a GQ,GP -Ov -o ${OUTDIR}/${sample}.vcf
 done < "$INFILE"
 
-echo "VCF dosyalarına örnek isimleri ekleniyor... / Adding sample names to VCF files..."
+echo "Adding sample names to VCF files..."
 
 # For each VCF file, append the sample name to every line and create a modified file
 for file in ${OUTDIR}/*.vcf; do
