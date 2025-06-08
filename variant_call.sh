@@ -23,7 +23,7 @@ echo "Starting variant calling process..."
 while IFS=$'\n' read -r sample
 do
     filein=/mnt/NEOGENE3/share/dna/hsa/comparative_seqs/alkan2014/${sample}
-    echo "İşleniyor: ${sample} / Processing: ${sample}"
+    echo "Processing: ${sample}"
     $bcftools mpileup -R -B -q 30 -Q 30 -f ${ref} -a FORMAT/DP,FORMAT/AD -r ${bedfile} ${filein} | \
     $bcftools call -mv -a GQ,GP -Ov -o ${OUTDIR}/${sample}.vcf
 done < "$INFILE"
