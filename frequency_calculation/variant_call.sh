@@ -12,7 +12,7 @@ ref=/mnt/NEOGENE3/share/ref/genomes/hsa/hg38-v0-Homo_sapiens_assembly38.fasta
 bedfile=/mnt/NEOGENE1/projects/selection_2023/dilanur/P3/50kb_hg38.bed
 
 # File containing sample names (one sample per line)
-INFILE=/mnt/NEOGENE1/projects/selection_2023/dilanur/P3/yeni_P3/alkan_ornekler.txt
+INFILE=/mnt/NEOGENE1/projects/selection_2023/dilanur/P3/yeni_P3/alkan_samples.txt
 
 OUTDIR=vcf_files
 mkdir -p ${OUTDIR}
