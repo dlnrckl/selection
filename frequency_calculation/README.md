@@ -1,138 +1,124 @@
 # Variant Frequency Calculation Workflow
 
-Bu klasör, modern ve karşılaştırmalı örneklerde varyant çağrımı yapıp, fenotip/grup bilgileri ekleyerek her grup için risk/minor alel frekanslarını maksimum olasılık yöntemini kullanarak hesaplayan **üç aşamalı** bir iş akışını içerir.
+This folder hosts a **three‑step pipeline** that starts with variant calling, enriches the resulting table with phenotype & grouping metadata, and finally computes per‑group risk/minor allele frequencies together with Wilson 95 % confidence intervals.
 
-> **Akış Özeti**
+> **Workflow Overview**
 >
-> 1. **`variant_call.sh`** » Örnek BAM dosyalarından VCF oluşturur.
-> 2. **`process_variant_table.R`** » Varyant tablosuna fenotip, risk/minor alel ve grup bilgileri ekler.
-> 3. **`freq_calculation.R`** » Her grup‑SNP‑fenotip kombinasyonu için alel frekansını ve %95 Wilson güven aralığını hesaplar.
+> 1. **`variant_call.sh`** → Generates per‑sample VCFs from BAM files.
+> 2. **`process_variant_table.R`** → Adds phenotype, risk/minor allele, and group columns to the combined variant table.
+> 3. **`freq_calculation.R`** → Calculates allele frequencies for every *Group × SNP × Phenotype* combination.
 
 ---
 
-## 1 | Ön Gereksinimler
+## 1 | Prerequisites
 
-| Yazılım                                                                                                                                               | Versiyon / Not |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **bcftools**                                                                                                                                          | ≥ 1.18         |
-| Yol, `variant_call.sh` içinde `bcftools=` satırında tanımlı                                                                                           |                |
-| **R**                                                                                                                                                 | ≥ 4.2          |
-| İlave paketler: `tidyverse`, `data.table`, `ggpubr`, `dplyr`, `Hmisc`, `glue`, `binom`                                                                |                |
-| **SLURM**                                                                                                                                             | (İsteğe bağlı) |
-| `variant_call.sh` SLURM job direktifleri içerir; yerel bilgisayarda çalıştırılacaksa `#!/bin/bash` kısmı dışındaki `#SBATCH` satırları kaldırılabilir |                |
+| Software     | Version / Notes                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| **bcftools** |  ≥ 1.18 — binary path defined by the variable `bcftools` inside `variant_call.sh`.                  |
+| **R**        |  ≥ 4.2 — required packages: `tidyverse`, `data.table`, `dplyr`, `ggpubr`, `Hmisc`, `glue`, `binom`. |
+| **SLURM**    |  (optional) — `variant_call.sh` ships with SBATCH lines; remove them for local execution.           |
 
-Ayrıca:
+Additional inputs
 
-* **Referans genom** (hg38 FASTA)
-* **Bölge BED dosyası** (50 kb aralıkları)
-* **Örnek BAM dizini**
-* **Örnek isimleri listesi** (`alkan_samples.txt`, her satırda bir BAM adı)
-* **Risk\_allele** tablosu
-  (Sütunlar: *Chromosome, POS, Risk\_Allele, Minor\_Allele, …, Phenotype*)
+* **Reference genome** (e.g. hg38 FASTA)
+* **Target BED file** specifying the regions used in mpileup
+* **Sample BAM list** (`alkan_samples.txt`, one BAM name per line)
+* **Risk\_allele table**  (columns: *Chromosome, POS, Risk\_Allele, Minor\_Allele, …, Phenotype*)
 
 ---
 
-## 2 | Dizin Yapısı
+## 2 | Folder Layout
 
 ```
 frequency_calculation/
 ├── variant_call.sh
 ├── process_variant_table.R
 ├── freq_calculation.R
-└── vcf_files/          # Çıktı VCF'ler buraya düşer (otomatik oluşturulur)
+└── vcf_files/          # generated automatically; holds the VCF outputs
 ```
 
 ---
 
-## 3 | Adım Adım Çalıştırma
+## 3 | Step‑by‑Step Execution
 
-### 3.1  Varyant Çağrımı — `variant_call.sh`
+\### 3.1  Variant Calling — `variant_call.sh`
 
 ```bash
-# SLURM’da göndermek için
+# Submit to SLURM (cluster)
 sbatch variant_call.sh
 
-# Yerel çalıştırmak için (SBATCH satırlarını silin)
+# OR run locally (after removing SBATCH lines)
 bash variant_call.sh
 ```
 
-Script neler yapar?
+What the script does:
 
-1. **Değişkenler**: `bcftools`, `ref` (hg38 FASTA), `bedfile`, `INFILE`, `OUTDIR` tanımlanır.
-2. `OUTDIR` yoksa oluşturulur → `vcf_files/`.
-3. `INFILE` listesindeki her örnek için:
+1. Defines key variables: `bcftools`, `ref`, `bedfile`, `INFILE`, `OUTDIR`.
+2. Creates `OUTDIR` (`vcf_files/`) if it doesn’t exist.
+3. For every sample listed in `INFILE`:
 
-   * `bcftools mpileup` → DP & AD field’ları dâhil, BED bölgesiyle sınırlı mpileup akışı.
-   * `bcftools call -mv` → VCF üretilir (`${sample}.vcf`).
-4. Her VCF’e örnek adı eklenir (`awk ... > .vcf.modified`).
-5. Tüm modifiye VCF’ler **`combined.vcf`**’te birleştirilir.
+   * Runs `bcftools mpileup` (restricted to the BED regions, including DP & AD tags).
+   * Pipes to `bcftools call -mv` → produces `${sample}.vcf`.
+4. Adds sample name to each VCF header via `awk`.
+5. Merges all modified VCFs into **`combined.vcf`**.
 
-> **Çıktı**: `vcf_files/*.vcf` + `combined.vcf`
+> **Outputs**: `vcf_files/*.vcf` and `combined.vcf`
 
-### 3.2  Varyant Tablosu İşleme — `process_variant_table.R`
+\### 3.2  Table Enrichment — `process_variant_table.R`
 
 ```R
-# Etkileşimli R oturumunda veya
 Rscript process_variant_table.R
 ```
 
-Script aşağıdakileri yapar:
+Main steps:
 
-1. Sunucudan gelen CSV içe alınır (sütun başlıkları: `CHROM, POS, DP, DP4, REF, ALT, BamID`).
-2. Pozisyon bilgilerinden `POS` kimliği oluşturur (`chr_pos`).
-3. `Risk_allele` tablosuyla eşleştirip:
+1. Reads the raw CSV exported from `combined.vcf` (columns such as `CHROM, POS, DP, DP4, REF, ALT, BamID`).
+2. Creates a unique coordinate key (`chr_pos`).
+3. Joins with the *Risk\_allele* table to append `SNP_ID`, `Risk_Allele`, `Minor_Allele`, `Phenotype`.
+4. Splits the `DP4` field into four depth columns (`Ref1, Ref2, Alt1, Alt2`).
+5. Calculates **risk/minor allele read count** (`Total_RAC`).
+6. Adds **Group** information (default set to `"Modern"`; change to suit your study design).
+7. Writes an R data frame object called `modern_df` (columns: `SampleName, Group, POS, SNP_ID, Phenotype, R, T`).
 
-   * `SNP_ID`, `Risk_Allele`, `Minor_Allele`, `Phenotype` ekler.
-4. `DP4` alanını dört kolona ayırır (`Ref1,Ref2,Alt1,Alt2`).
-5. **Risk (veya Minor) alel ok sayısı** hesaplanır ➜ `Total_RAC`.
-6. **Grup** bilgisi eklenir (örnekte tümü `"Modern"`; tarihsel vs. gruplar için düzenleyin).
-7. Nihai çıktı veri çerçevesi → `modern_df` (sütunlar: `SampleName, Group, POS, SNP_ID, Phenotype, R, T`).
+> **Note**: Paths and object names (e.g. `comperative_alkan`, `Risk_allele`) are hard‑coded; modify them if your filenames differ.
 
-> **Not**: Dosya yolları ve nesne adları (ör. `comperative_alkan`, `Risk_allele`) betikte sabit; kendi veri adlarınıza göre güncelleyin.
-
-### 3.3  Frekans Hesaplama — `freq_calculation.R`
+\### 3.3  Frequency Calculation — `freq_calculation.R`
 
 ```R
 Rscript freq_calculation.R
 ```
 
-1. `modern_df` ve (opsiyonel) başka grup veri çerçeveleri (`comp_others4` vb.) birleştirilir.
-2. Her **Grup × SNP\_ID × Phenotype** alt‑kümesi için:
+1. Loads `modern_df` (and optionally other group tables such as `comp_others4`).
+2. For each *Group × SNP\_ID × Phenotype* subset:
 
-   * Maksimum Olasılık Tahmini (MLE) ile risk/minor alel frekansı `p̂` bulunur.
-   * Wilson %95 güven aralığı hesaplanır (`binom.confint`).
-3. Sonuçlar → **`all_freq.csv`** (varsayılan yol: masaüstü). Sütunlar:
+   * Estimates allele frequency **p̂** by Maximum Likelihood.
+   * Computes Wilson 95 % confidence interval using `binom.confint`.
+3. Saves the results to **`all_freq.csv`** (default location: Desktop). Columns include:
 
-   * `Period (Group), SNPid, Phenotype, POPsize, pHat, CI_Lower, CI_Upper`, vs.
-
-> **Çıktı**: `all_freq.csv`
+   * `Period`, `SNPid`, `Phenotype`, `POPsize`, `pHat`, `CI_Lower`, `CI_Upper`, …
 
 ---
 
-## 4 | Sonuç Dosyaları
+## 4 | Key Output Files
 
-| Dosya                  | Açıklama                                        |
-| ---------------------- | ----------------------------------------------- |
-| `combined.vcf`         | Tüm örneklerin tek VCF dosyası                  |
-| `modern_df` (R objesi) | Fenotip ve grup eklenmiş varyant tablosu        |
-| `all_freq.csv`         | Grup bazlı alel frekansları ve güven aralıkları |
-
----
-
-## 5 | Özelleştirme & İpuçları
-
-* **SLURM direktifleri**: Küme kaynaklarınıza göre `--partition`, `--time`, `--nodes` vb. alanları güncelleyin.
-* **Bölge seçimi**: `bedfile` satırını değiştirerek farklı genom bölgeleri hedefleyin.
-* **Grup Ataması**: `process_variant_table.R` içinde `modern$Group = "Modern"` satırını kendi sınıflandırmanıza göre düzenleyin.
-* **Rscript Parametreleştirme**: Betikler şu anda sabit yol/nesne adlarıyla yazılmıştır; argümanla değişken almak için `commandArgs(trailingOnly=TRUE)` eklenebilir.
+| File           | Description                                                    |
+| -------------- | -------------------------------------------------------------- |
+| `combined.vcf` | Multi‑sample VCF containing all called variants                |
+| `modern_df`    |  R object — enriched variant table with phenotype & group info |
+| `all_freq.csv` | Final per‑group allele frequencies with Wilson CIs             |
 
 ---
 
-## 6 | Referanslar
+## 5 | Customization Tips
 
-* **bcftools**: Danecek et al., 2011, *Bioinformatics* 27(21): 2987‑2993.
-* **Wilson Güven Aralığı**: Wilson, 1927, *J. Amer. Stat. Assoc.* 22: 209‑212.
+* **SLURM directives** — adjust `--partition`, `--time`, and resource flags to match your cluster.
+* **Region selection** — point `bedfile` to a different BED to focus on other genomic intervals.
+* **Group assignment** — edit the line `modern$Group = "Modern"` in `process_variant_table.R` to reflect archaeological periods, populations, etc.
+* **Parameterization** — the R scripts currently rely on hard‑coded paths; consider adding argument parsing via `commandArgs(trailingOnly = TRUE)`.
 
 ---
 
-> Soru, yorum veya katkılarınız için lütfen *Issues* bölümünden çekinmeden ulaştırın.
+## 6 | References
+
+* **bcftools** — Danecek et al. 2011. *Bioinformatics* 27(21): 2987‑2993.
+* **Wilson CI** — Wilson, E.B. 1927. *J. Amer. Stat. Assoc.* 22: 209‑212.
