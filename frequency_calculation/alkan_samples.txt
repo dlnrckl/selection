@@ -1,0 +1,16 @@
+06A010111.realigned.bam.vcf
+08P210611.realigned.bam.vcf
+24D220611.realigned.bam.vcf
+25A220611.realigned.bam.vcf
+31P140611.realigned.bam.vcf
+32A140611.realigned.bam.vcf
+33M140611.realigned.bam.vcf
+34S291210.realigned.bam.vcf
+35C240511.realigned.bam.vcf
+38I220611.realigned.bam.vcf
+42S291210.realigned.bam.vcf
+48S210611.realigned.bam.vcf
+50G301210.realigned.bam.vcf
+52C130611.realigned.bam.vcf
+57M220611.realigned.bam.vcf
+65A220611.realigned.bam.vcf
