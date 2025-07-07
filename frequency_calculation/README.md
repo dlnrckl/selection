@@ -111,10 +111,8 @@ Rscript freq_calculation.R
 
 ## 5 | Customization Tips
 
-* **SLURM directives** — adjust `--partition`, `--time`, and resource flags to match your cluster.
 * **Region selection** — point `bedfile` to a different BED to focus on other genomic intervals.
 * **Group assignment** — edit the line `modern$Group = "Modern"` in `process_variant_table.R` to reflect archaeological periods, populations, etc.
-* **Parameterization** — the R scripts currently rely on hard‑coded paths; consider adding argument parsing via `commandArgs(trailingOnly = TRUE)`.
 
 ---
 
